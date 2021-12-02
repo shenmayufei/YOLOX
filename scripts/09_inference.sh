@@ -1,0 +1,1 @@
+python -m pdb tools/demo.py image -f exps/retails/yolox_s.py -c YOLOX_outputs/yolox_s/best_ckpt.pth --path assets/test_images/diantou --conf 0.25 --nms 0.45 --tsize 640 --save_result --device gpu

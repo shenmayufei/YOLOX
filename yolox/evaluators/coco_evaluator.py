@@ -10,6 +10,7 @@ import tempfile
 import time
 from loguru import logger
 from tqdm import tqdm
+import numpy as np
 
 import torch
 
@@ -216,6 +217,30 @@ class COCOEvaluator:
             with contextlib.redirect_stdout(redirect_string):
                 cocoEval.summarize()
             info += redirect_string.getvalue()
+            info += get_per_class_evaluation(cocoEval.eval["precision"], cocoEval.eval["recall"]) # add per-category AP 20210831
             return cocoEval.stats[0], cocoEval.stats[1], info
         else:
             return 0, 0, info
+def get_per_class_evaluation(precisions, recalls):
+    # Compute per-category AP
+    # from https://github.com/facebookresearch/detectron2/
+    # precision: (iou, recall, cls, area range, max dets)
+    class_num = precisions.shape[2]
+    results_per_category = ''
+    for cls_idx in range(class_num):
+        # area range index 0: all area ranges
+        # max dets index -1: typically 100 per image
+        precision = precisions[:, :, cls_idx, 0, -1]
+        precision_50 = precisions[0, :, cls_idx, 0, -1]
+        precision = precision[precision > -1]
+        recall = recalls[ :, cls_idx, 0, -1]
+        recall_50 = recalls[0, cls_idx, 0, -1]
+        recall = recall[recall > -1]
+        ap = np.mean(precision) if precision.size else float("nan")
+        ap_50 = np.mean(precision_50) if precision.size else float("nan")
+        rec = np.mean(recall) if precision.size else float("nan")
+        rec_50 = np.mean(recall_50) if precision.size else float("nan")
+        results_per_category += '{}:\tAP:{:6.2f}, Recall:{:6.2f}, AP_50:{:6.2f}, Recall_50:{:6.2f}.\n'.format(
+            cls_idx+1, float(ap * 100), float(rec * 100), float(ap_50 * 100), float(rec_50 * 100)
+        )
+    return results_per_category

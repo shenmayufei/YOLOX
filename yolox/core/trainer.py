@@ -27,7 +27,7 @@ from yolox.utils import (
     setup_logger,
     synchronize
 )
-
+from ncnnqat import unquant_weight, merge_freeze_bn, register_quantization_hook,save_table
 
 class Trainer:
     def __init__(self, exp, args):
@@ -76,6 +76,20 @@ class Trainer:
     def train_in_epoch(self):
         for self.epoch in range(self.start_epoch, self.max_epoch):
             self.before_epoch()
+            # '''qat'''
+            logger.info("epoch: {}".format(self.epoch))
+            # if self.epoch  == self.max_epoch - self.exp.qat_epoch:
+            if self.exp.qat and self.exp.run_once:
+                register_quantization_hook(self.model)
+                # self.model = fuse_model(self.model)
+                self.model = merge_freeze_bn(self.model)
+                logger.info("qat hook...")
+                self.exp.run_once = False
+            if self.exp.qat and not self.exp.run_once:
+                #pdb.set_trace()
+                self.model = merge_freeze_bn(self.model)
+                logger.info("merge bn ...")
+            '''qat'''
             self.train_in_iter()
             self.after_epoch()
 
@@ -103,6 +117,12 @@ class Trainer:
                 scaled_loss.backward()
         else:
             loss.backward()
+        '''qat'''
+        # if self.epoch >= self.max_epoch - self.exp.qat_epoch:
+        if self.exp.qat:
+            logger.info("unquant_weight...")
+            self.model.apply(unquant_weight)
+        '''qat'''
         self.optimizer.step()
 
         if self.use_model_ema:

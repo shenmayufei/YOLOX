@@ -94,6 +94,7 @@ class Exp(BaseExp):
             data_dir=self.data_dir,
             json_file=self.train_ann,
             img_size=self.input_size,
+            name='train',
             preproc=TrainTransform(
                 rgb_means=(0.485, 0.456, 0.406),
                 std=(0.229, 0.224, 0.225),
@@ -207,8 +208,9 @@ class Exp(BaseExp):
 
         valdataset = COCODataset(
             data_dir=self.data_dir,
+            # json_file=self.val_ann if not testdev else "image_info_test-dev2017.json",
             json_file=self.val_ann if not testdev else "image_info_test-dev2017.json",
-            name="val2017" if not testdev else "test2017",
+            name="test" if not testdev else "test",
             img_size=self.test_size,
             preproc=ValTransform(
                 rgb_means=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)

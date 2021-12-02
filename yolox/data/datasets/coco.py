@@ -37,6 +37,7 @@ class COCODataset(Dataset):
         super().__init__(img_size)
         if data_dir is None:
             data_dir = os.path.join(get_yolox_datadir(), "COCO")
+            # data_dir = get_yolox_datadir()
         self.data_dir = data_dir
         self.json_file = json_file
 
@@ -102,7 +103,7 @@ class COCODataset(Dataset):
         )
 
         img = cv2.imread(img_file)
-        assert img is not None
+        assert img is not None ,print("the img path is {}".format(img_file))
 
         return img, res.copy(), img_info, np.array([id_])
 
