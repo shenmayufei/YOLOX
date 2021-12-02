@@ -14,6 +14,7 @@ from yolox.models.network_blocks import SiLU
 from yolox.utils import replace_module
 from yolox.utils import fuse_model
 from ncnnqat import unquant_weight, merge_freeze_bn, register_quantization_hook,save_table
+import copy
 
 def make_parser():
     parser = argparse.ArgumentParser("YOLOX onnx deploy")
@@ -59,17 +60,12 @@ def main():
 
     if not args.experiment_name:
         args.experiment_name = exp.exp_name
-
     model = exp.get_model()
 
-
-    # model = fuse_model(model)  # fuse get model sucessful
-
-    register_quantization_hook(model)
+    # load and insert fake op and merge bn
+    model =register_quantization_hook(model).cuda()
     model = merge_freeze_bn(model)
-
-    model = fuse_model(model)
-
+    # load checkpoints
     if args.ckpt is None:
         file_name = os.path.join(exp.output_dir, args.experiment_name)
         ckpt_file = os.path.join(file_name, "best_ckpt.pth")
@@ -79,35 +75,21 @@ def main():
     # load the model state dict
     ckpt = torch.load(ckpt_file, map_location="cpu")
 
-    model.eval()
+
     if "model" in ckpt:
         ckpt = ckpt["model"]
-    model.load_state_dict(ckpt, strict=False)
+    model.load_state_dict(ckpt)#, strict=False)
     model = replace_module(model, nn.SiLU, SiLU)
     model.head.decode_in_inference = False
-
+    model_org = copy.deepcopy(model)
     logger.info("loading checkpoint done.")
+
     dummy_input = torch.randn(1, 3, exp.test_size[0], exp.test_size[1]).cuda()
-
-    train = False
-    dynamic = False
-    f = "test_yolox.onnx"
-
-    # model = merge_freeze_bn(model)
-
-    # torch.onnx._export(
-    #     model,
-    #     dummy_input,
-    #     args.output_name,
-    #     _retain_param_name=True,
-    #     input_names=[args.input],
-    #     output_names=[args.output],
-    #     opset_version=args.opset,
-    # )
     # 该函数执行正确
-    model = register_quantization_hook(model).cuda()
+
+    fusemodel = fuse_model(model)
     torch.onnx._export(
-        model,
+        fusemodel,
         dummy_input,
         args.output_name,
         verbose=True,
@@ -118,6 +100,8 @@ def main():
         opset_version=args.opset,
     )
     # 该函数导出 reshape 算子有误
+    # train = False
+    # dynamic = False
     # torch.onnx.export(model, dummy_input, f, verbose=True, opset_version=args.opset,
     #                   training=torch.onnx.TrainingMode.TRAINING if train else torch.onnx.TrainingMode.EVAL,
     #                   # training=torch.onnx.TrainingMode.TRAINING,
@@ -131,7 +115,7 @@ def main():
 
     table_path = args.output_name.split('.')[0] + '.table'
     logger.info("generated table named {}".format(table_path))
-    save_table(model, onnx_path=args.output_name, table=table_path)
+    save_table(model_org, onnx_path=args.output_name, table=table_path)
     
 
     if not args.no_onnxsim:
